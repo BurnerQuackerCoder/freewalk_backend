@@ -1,5 +1,38 @@
 import io
-import imghdr
+try:
+    import imghdr as _imghdr
+except Exception:
+    _imghdr = None
+
+try:
+    from PIL import Image as _PILImage
+except Exception:
+    _PILImage = None
+
+from typing import Optional
+
+
+def _detect_image_type_from_bytes(file_bytes: bytes) -> Optional[str]:
+    """Return a short image type string like 'jpeg' or 'png', or None if unknown.
+
+    Uses stdlib imghdr when available, otherwise falls back to Pillow if installed.
+    """
+    if _imghdr is not None:
+        try:
+            return _imghdr.what(None, h=file_bytes)
+        except Exception:
+            pass
+    if _PILImage is not None:
+        try:
+            from io import BytesIO
+
+            with _PILImage.open(BytesIO(file_bytes)) as img:
+                fmt = (img.format or "").lower()
+                if fmt in ("jpeg", "png"):
+                    return fmt
+        except Exception:
+            pass
+    return None
 import os
 import math
 import uuid
@@ -138,8 +171,8 @@ async def upload_report(
     file_bytes = await image.read()
     detected_type = None
     if image.content_type not in ALLOWED_CONTENT_TYPES:
-        # Try to detect the image type from bytes
-        detected = imghdr.what(None, h=file_bytes)
+        # Try to detect the image type from bytes (supports imghdr or Pillow fallback)
+        detected = _detect_image_type_from_bytes(file_bytes)
         if detected == "jpeg":
             detected_type = "image/jpeg"
         elif detected == "png":
