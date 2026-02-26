@@ -10,6 +10,8 @@ except Exception:
     _PILImage = None
 
 from typing import Optional
+from pydantic import EmailStr
+from app.schemas.schemas import CategoryEnum, LoginResponse, ReportResponse
 
 
 def _detect_image_type_from_bytes(file_bytes: bytes) -> Optional[str]:
@@ -45,7 +47,8 @@ from sqlalchemy import create_engine, Column, Integer, Float, String, DateTime, 
 from sqlalchemy.orm import declarative_base, sessionmaker, relationship, Session
 from supabase import create_client, Client
 from dotenv import load_dotenv
-
+from app.core.database import get_db
+from app.models import User, Violation, Report
 
 
 # --- 1. CLOUD CREDENTIALS (PASTE YOURS HERE) ---
@@ -68,53 +71,53 @@ try:
 except Exception as e:
     raise RuntimeError(f"Failed to initialize Supabase client: {e}")
 
-# --- 2. DATABASE SETUP (PostgreSQL) ---
-# Notice we removed "check_same_thread" because Postgres handles multiple connections easily!
-engine = create_engine(DATABASE_URL)
-SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
-Base = declarative_base()
+# # --- 2. DATABASE SETUP (PostgreSQL) ---
+# # Notice we removed "check_same_thread" because Postgres handles multiple connections easily!
+# engine = create_engine(DATABASE_URL)
+# SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
+# Base = declarative_base()
 
-class User(Base):
-    __tablename__ = "users"
-    id = Column(Integer, primary_key=True, index=True)
-    email = Column(String, unique=True, index=True)
-    total_points = Column(Integer, default=0)
-    created_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
-    reports = relationship("Report", back_populates="user")
+# class User(Base):
+#     __tablename__ = "users"
+#     id = Column(Integer, primary_key=True, index=True)
+#     email = Column(String, unique=True, index=True)
+#     total_points = Column(Integer, default=0)
+#     created_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
+#     reports = relationship("Report", back_populates="user")
 
-class Violation(Base):
-    __tablename__ = "violations"
-    id = Column(Integer, primary_key=True, index=True)
-    latitude = Column(Float, index=True)
-    longitude = Column(Float, index=True)
-    category = Column(String, index=True)
-    entity_reference = Column(String, nullable=True)
-    created_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
-    updated_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc))
-    reports = relationship("Report", back_populates="violation")
+# class Violation(Base):
+#     __tablename__ = "violations"
+#     id = Column(Integer, primary_key=True, index=True)
+#     latitude = Column(Float, index=True)
+#     longitude = Column(Float, index=True)
+#     category = Column(String, index=True)
+#     entity_reference = Column(String, nullable=True)
+#     created_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
+#     updated_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc))
+#     reports = relationship("Report", back_populates="violation")
 
-class Report(Base):
-    __tablename__ = "reports"
-    id = Column(Integer, primary_key=True, index=True)
-    violation_id = Column(Integer, ForeignKey("violations.id"))
-    user_id = Column(Integer, ForeignKey("users.id"))
-    image_path = Column(String) # This will now hold a public cloud URL!
-    timestamp = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
-    violation = relationship("Violation", back_populates="reports")
-    user = relationship("User", back_populates="reports")
+# class Report(Base):
+#     __tablename__ = "reports"
+#     id = Column(Integer, primary_key=True, index=True)
+#     violation_id = Column(Integer, ForeignKey("violations.id"))
+#     user_id = Column(Integer, ForeignKey("users.id"))
+#     image_path = Column(String) # This will now hold a public cloud URL!
+#     timestamp = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
+#     violation = relationship("Violation", back_populates="reports")
+#     user = relationship("User", back_populates="reports")
 
-# Optionally create tables locally (set AUTO_CREATE_TABLES=true for dev/migrations-free environments)
-if os.getenv("AUTO_CREATE_TABLES", "false").lower() == "true":
-    Base.metadata.create_all(bind=engine)
+# # Optionally create tables locally (set AUTO_CREATE_TABLES=true for dev/migrations-free environments)
+# if os.getenv("AUTO_CREATE_TABLES", "false").lower() == "true":
+#     Base.metadata.create_all(bind=engine)
 
 # Basic logging
 logging.basicConfig(level=logging.INFO)
 
-# Constants
-MAX_UPLOAD_SIZE = int(os.getenv("MAX_UPLOAD_SIZE_BYTES", 5 * 1024 * 1024))  # default 5MB
-ALLOWED_CONTENT_TYPES = {"image/jpeg", "image/png", "image/jpg"}
-NEARBY_METERS = float(os.getenv("NEARBY_METERS", 5.0))
-RECENT_HOURS = int(os.getenv("RECENT_HOURS", 24))
+# # Constants
+# MAX_UPLOAD_SIZE = int(os.getenv("MAX_UPLOAD_SIZE_BYTES", 5 * 1024 * 1024))  # default 5MB
+# ALLOWED_CONTENT_TYPES = {"image/jpeg", "image/png", "image/jpg"}
+# NEARBY_METERS = float(os.getenv("NEARBY_METERS", 5.0))
+# RECENT_HOURS = int(os.getenv("RECENT_HOURS", 24))
 
 # --- 3. THE MATH ---
 def calculate_distance_meters(lat1, lon1, lat2, lon2):
@@ -130,16 +133,16 @@ def calculate_distance_meters(lat1, lon1, lat2, lon2):
 app = FastAPI(title="FreeWalk Cloud API")
 
 
-def get_db():
-    db = SessionLocal()
-    try:
-        yield db
-    finally:
-        db.close()
+# def get_db():
+#     db = SessionLocal()
+#     try:
+#         yield db
+#     finally:
+#         db.close()
 
 
-@app.post("/login/")
-async def login_user(email: str = Form(...), db: Session = Depends(get_db)):
+@app.post("/login/", response_model=LoginResponse)
+async def login_user(email: EmailStr = Form(...), db: Session = Depends(get_db)):
     user = db.query(User).filter(User.email == email).first()
     if not user:
         user = User(email=email)
@@ -148,12 +151,12 @@ async def login_user(email: str = Form(...), db: Session = Depends(get_db)):
         db.refresh(user)
     return {"user_id": user.id, "email": user.email, "total_points": user.total_points}
 
-@app.post("/upload-report/")
+@app.post("/upload-report/", response_model=ReportResponse)
 async def upload_report(
-    latitude: float = Form(...),
-    longitude: float = Form(...),
-    category: str = Form("shop"),
-    user_email: str = Form(...),
+    latitude: float = Form(..., ge=-90.0, le=90.0),
+    longitude: float = Form(..., ge=-180.0, le=180.0),
+    category: CategoryEnum = Form(CategoryEnum.shop),
+    user_email: EmailStr = Form(...),
     license_plate: Optional[str] = Form(None),
     image: UploadFile = File(...),
     db: Session = Depends(get_db),
