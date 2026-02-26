@@ -164,11 +164,6 @@ async def upload_report(
     # Log incoming content type for debugging
     logging.info("Received upload content-type: %s", image.content_type)
 
-    # Basic input validation
-    if not (-90.0 <= latitude <= 90.0) or not (-180.0 <= longitude <= 180.0):
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid latitude/longitude")
-    # Allow clients that incorrectly set Content-Type to application/octet-stream
-    # We'll validate the image by inspecting its bytes below.
 
     # --- SAFE: read bytes and validate size ---
     file_bytes = await image.read()
