@@ -6,8 +6,9 @@ from typing import Optional
 
 from fastapi import APIRouter, File, UploadFile, Form, Depends, HTTPException, status
 from sqlalchemy.orm import Session
-from sqlalchemy import func
+from sqlalchemy import func, cast
 from geoalchemy2.elements import WKTElement
+from geoalchemy2 import Geography
 from pydantic import EmailStr
 
 from app.core.database import get_db
@@ -140,7 +141,7 @@ async def upload_report(
             target_point = WKTElement(f"POINT({longitude} {latitude})", srid=4326)
 
             # --- THE MAGIC: Ask PostGIS which Ward polygon contains this GPS point ---
-            containing_ward = db.query(Ward).filter(func.ST_Contains(Ward.geom, target_point)).first()
+            containing_ward = db.query(Ward).filter(func.ST_Intersects(Ward.geom, cast(target_point, Geography))).first()
 
             new_violation = Violation(
                 latitude=latitude,
