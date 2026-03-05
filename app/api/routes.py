@@ -25,8 +25,8 @@ from app.schemas.schemas import CategoryEnum, ReportResponse, OTPRequest, Verify
 # Add the auth service import
 from app.services.auth import send_otp_email, verify_otp_code
 from app.api.deps import get_current_user
-
 from typing import List
+from geoalchemy2.shape import to_shape
 
 ALLOWED_CONTENT_TYPES = {"image/jpeg", "image/png", "image/jpg"}
 
@@ -233,3 +233,24 @@ def get_leaderboard(db: Session = Depends(get_db)):
         leaderboard.append(LeaderboardEntry(email_masked=masked, total_points=user.total_points))
         
     return leaderboard
+
+class MapPoint(BaseModel):
+    lat: float
+    lng: float
+    category: str
+
+@router.get("/admin/map-data/", response_model=List[MapPoint])
+def get_map_data(db: Session = Depends(get_db)):
+    """Fetches all violation points for the heatmap."""
+    violations = db.query(Violation).all()
+    
+    map_points = []
+    for v in violations:
+        # Convert the PostGIS geography object back into a Python shape
+        point = to_shape(v.geom) 
+        map_points.append(MapPoint(
+            lat=point.y, 
+            lng=point.x, 
+            category=v.category
+        ))
+    return map_points
