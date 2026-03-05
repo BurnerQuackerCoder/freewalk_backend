@@ -246,11 +246,11 @@ def get_map_data(db: Session = Depends(get_db)):
     
     map_points = []
     for v in violations:
-        # Convert the PostGIS geography object back into a Python shape
-        point = to_shape(v.geom) 
+        # We can just read the standard float columns we created in Phase 1!
         map_points.append(MapPoint(
-            lat=point.y, 
-            lng=point.x, 
+            lat=v.latitude, 
+            lng=v.longitude, 
             category=v.category
         ))
+        
     return map_points
