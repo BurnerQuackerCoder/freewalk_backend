@@ -3,6 +3,7 @@ import math
 from typing import Optional, cast
 from datetime import datetime, timedelta, timezone
 from typing import Optional
+from pydantic import BaseModel
 
 from fastapi import APIRouter, File, UploadFile, Form, Depends, HTTPException, status
 from sqlalchemy.orm import Session
@@ -25,7 +26,6 @@ from app.schemas.schemas import CategoryEnum, ReportResponse, OTPRequest, Verify
 from app.services.auth import send_otp_email, verify_otp_code
 from app.api.deps import get_current_user
 
-from app.schemas import LeaderboardEntry
 from typing import List
 
 ALLOWED_CONTENT_TYPES = {"image/jpeg", "image/png", "image/jpg"}
@@ -210,15 +210,19 @@ async def upload_report(
         db.rollback()
         raise HTTPException(status_code=500, detail="Internal server error")
 
+#1. Define the schema directly above the endpoint
+class LeaderboardEntry(BaseModel):
+    email_masked: str
+    total_points: int
+
+# 2. The Endpoint
 @router.get("/leaderboard/", response_model=List[LeaderboardEntry])
 def get_leaderboard(db: Session = Depends(get_db)):
     """Fetches the top 10 heroes in Ward 118."""
-    # Get the top 10 users sorted by points
     top_users = db.query(User).order_by(User.total_points.desc()).limit(10).all()
     
     leaderboard = []
     for user in top_users:
-        # Mask the email for privacy (e.g., "johndoe@gmail.com" -> "joh***@gmail.com")
         parts = user.email.split('@')
         if len(parts) == 2:
             name_part = parts[0][:3] + "***" if len(parts[0]) > 3 else parts[0] + "***"
