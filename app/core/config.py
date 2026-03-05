@@ -34,3 +34,6 @@ if not settings.SUPABASE_URL:
     raise RuntimeError("Missing required env var: SUPABASE_URL")
 if not settings.SUPABASE_KEY:
     raise RuntimeError("Missing required env var: SUPABASE_KEY")
+# --- Add this new check below ---
+if not getattr(settings, "GEMINI_API_KEY", None):
+    raise RuntimeError("Missing required env var: GEMINI_API_KEY")
