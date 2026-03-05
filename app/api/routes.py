@@ -27,6 +27,7 @@ from app.services.auth import send_otp_email, verify_otp_code
 from app.api.deps import get_current_user
 from typing import List
 from geoalchemy2.shape import to_shape
+from app.services.ai import verify_image_with_ai
 
 ALLOWED_CONTENT_TYPES = {"image/jpeg", "image/png", "image/jpg"}
 
@@ -118,7 +119,22 @@ async def upload_report(
 
     if len(file_bytes) > settings.MAX_UPLOAD_SIZE_BYTES:
         raise HTTPException(status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE, detail="Image too large")
+    
+    # --- 🛑 THE AI BOUNCER MUST BE HERE 🛑 ---
+    is_valid_evidence = verify_image_with_ai(file_bytes, category.value, effective_content_type)
+    
+    if not is_valid_evidence:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST, 
+            detail=f"AI Verification Failed: Could not clearly detect a '{category.value}' violation in this image. No points awarded."
+        )
+    # ------------------------------------------
 
+    try:
+        # This Supabase upload should ONLY happen if the AI says YES above
+        public_image_url = upload_image_to_storage(file_bytes, image.filename, effective_content_type)
+    except RuntimeError as e:
+        raise HTTPException(status_code=500, detail=str(e))
     try:
         public_image_url = upload_image_to_storage(file_bytes, image.filename, effective_content_type)
     except RuntimeError as e:
