@@ -31,3 +31,7 @@ class AuthResponse(BaseModel):
     user_id: int
     email: str
     total_points: int
+
+class LeaderboardEntry(BaseModel):
+    email_masked: str
+    total_points: int

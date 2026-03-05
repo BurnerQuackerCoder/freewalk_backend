@@ -25,6 +25,8 @@ from app.schemas.schemas import CategoryEnum, ReportResponse, OTPRequest, Verify
 from app.services.auth import send_otp_email, verify_otp_code
 from app.api.deps import get_current_user
 
+from app.schemas import LeaderboardEntry
+from typing import List
 
 ALLOWED_CONTENT_TYPES = {"image/jpeg", "image/png", "image/jpg"}
 
@@ -207,3 +209,23 @@ async def upload_report(
         logging.exception("Error while processing report; rolling back DB transaction")
         db.rollback()
         raise HTTPException(status_code=500, detail="Internal server error")
+
+@router.get("/leaderboard/", response_model=List[LeaderboardEntry])
+def get_leaderboard(db: Session = Depends(get_db)):
+    """Fetches the top 10 heroes in Ward 118."""
+    # Get the top 10 users sorted by points
+    top_users = db.query(User).order_by(User.total_points.desc()).limit(10).all()
+    
+    leaderboard = []
+    for user in top_users:
+        # Mask the email for privacy (e.g., "johndoe@gmail.com" -> "joh***@gmail.com")
+        parts = user.email.split('@')
+        if len(parts) == 2:
+            name_part = parts[0][:3] + "***" if len(parts[0]) > 3 else parts[0] + "***"
+            masked = f"{name_part}@{parts[1]}"
+        else:
+            masked = "Unknown Hero"
+            
+        leaderboard.append(LeaderboardEntry(email_masked=masked, total_points=user.total_points))
+        
+    return leaderboard
