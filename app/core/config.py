@@ -5,6 +5,7 @@ class Settings(BaseSettings):
     DATABASE_URL: str
     SUPABASE_URL: str
     SUPABASE_KEY: str
+    GEMINI_API_KEY: str
     
     # Configurable Business Logic (With safe defaults)
     MAX_UPLOAD_SIZE_BYTES: int = 5 * 1024 * 1024

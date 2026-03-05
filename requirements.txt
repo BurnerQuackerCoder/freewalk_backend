@@ -71,3 +71,4 @@ alembic==1.13.1
 email-validator==2.1.1
 disposable-email-domains==0.0.98
 GeoAlchemy2==0.14.3
+google-generativeai==0.8.3
