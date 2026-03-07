@@ -32,7 +32,7 @@ def verify_image_with_ai(image_bytes: bytes, category: str, content_type: str) -
         )
 
         response = client.models.generate_content(
-            model="gemini-1.5-flash",
+            model="gemini-2.5-flash",
             contents=[prompt, image_part],
         )
 
