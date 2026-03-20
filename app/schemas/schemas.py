@@ -1,5 +1,7 @@
 from pydantic import BaseModel, EmailStr
 from enum import Enum
+from datetime import datetime
+from typing import List
 
 class CategoryEnum(str, Enum):
     shop = "shop"
@@ -36,3 +38,15 @@ class AuthResponse(BaseModel):
 class LeaderboardEntry(BaseModel):
     email_masked: str
     total_points: int
+
+class MyReportItem(BaseModel):
+    id: int
+    category: str
+    timestamp: datetime
+    image_url: str
+    status: str
+
+class MyProfileResponse(BaseModel):
+    email: str
+    total_points: int
+    reports: List[MyReportItem]

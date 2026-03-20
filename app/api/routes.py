@@ -15,7 +15,7 @@ from pydantic import EmailStr
 from app.core.database import get_db
 from app.models import User, Violation, Report
 from app.models import User, Violation, Report, Ward
-from app.schemas.schemas import CategoryEnum, LoginResponse, ReportResponse, EmailStr
+from app.schemas.schemas import CategoryEnum, LoginResponse, ReportResponse, EmailStr, MyProfileResponse
 from app.core.config import settings
 from app.services.media import detect_image_type_from_bytes, upload_image_to_storage
 
@@ -283,3 +283,31 @@ def get_map_data(db: Session = Depends(get_db),current_user: User = Depends(get_
         ))
         
     return map_points
+
+@router.get("/profile/", response_model=MyProfileResponse)
+def get_user_profile(db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+    """Fetches the user's stats and their entire report history."""
+    
+    # Fetch all reports belonging to this specific user, newest first
+    reports = db.query(Report).filter(Report.user_id == current_user.id).order_by(Report.timestamp.desc()).all()
+    
+    report_list = []
+    for r in reports:
+        # Get the category from the linked violation
+        cat = r.violation.category if r.violation else "Unknown"
+        
+        report_list.append({
+            "id": r.id,
+            "category": cat.capitalize(),
+            "timestamp": r.timestamp,
+            "image_url": r.image_path,
+            # MVP Hack: Since we don't have a database column for status yet, we mock it.
+            # In Version 2, the Admin Map will have a button to change this to "Resolved"!
+            "status": "Pending BMC" 
+        })
+        
+    return {
+        "email": current_user.email,
+        "total_points": current_user.total_points,
+        "reports": report_list
+    }
