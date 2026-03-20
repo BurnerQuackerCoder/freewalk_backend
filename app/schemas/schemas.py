@@ -31,6 +31,7 @@ class AuthResponse(BaseModel):
     user_id: int
     email: str
     total_points: int
+    is_admin: bool = False
 
 class LeaderboardEntry(BaseModel):
     email_masked: str
