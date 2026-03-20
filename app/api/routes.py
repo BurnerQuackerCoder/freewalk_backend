@@ -262,8 +262,7 @@ class MapPoint(BaseModel):
     category: str
 
 @router.get("/admin/map-data/", response_model=List[MapPoint])
-def get_map_data(db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user))# 🛑 1. Demands a valid token!):
+def get_map_data(db: Session = Depends(get_db),current_user: User = Depends(get_current_user)):
     """Fetches all violation points for the heatmap."""
     # 🛑 2. SECURITY CHECK: Ensure the database says they are an admin
     if not getattr(current_user, 'is_admin', False):
