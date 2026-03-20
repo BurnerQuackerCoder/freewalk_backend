@@ -28,6 +28,8 @@ from app.api.deps import get_current_user
 from typing import List
 from geoalchemy2.shape import to_shape
 from app.services.ai import verify_image_with_ai
+from datetime import datetime, timedelta
+from app.services.geo import calculate_distance_meters # Use geopy or similar
 
 ALLOWED_CONTENT_TYPES = {"image/jpeg", "image/png", "image/jpg"}
 
@@ -81,10 +83,13 @@ async def verify_otp(payload: VerifyOTPRequest, db: Session = Depends(get_db)):
     # Sync the Supabase Auth user to our local PostgreSQL database
     user = db.query(User).filter(User.email == payload.email).first()
     if not user:
-        user = User(email=payload.email)
+        user = User(email=payload.email, is_admin=False)
         db.add(user)
         db.commit()
         db.refresh(user)
+    # 🛑 THE FIX: Safely check if they are an admin in the database
+    # (Using getattr prevents crashes if you haven't run your DB migrations yet)
+    user_is_admin = getattr(user, "is_admin", False)
 
     return {
         "access_token": access_token,
@@ -92,6 +97,7 @@ async def verify_otp(payload: VerifyOTPRequest, db: Session = Depends(get_db)):
         "user_id": user.id,
         "email": user.email,
         "total_points": user.total_points,
+        "is_admin": user_is_admin
     }
 
 @router.post("/upload-report/", response_model=ReportResponse)
@@ -122,7 +128,7 @@ async def upload_report(
     
     # --- 🛑 THE AI BOUNCER MUST BE HERE 🛑 ---
     is_valid_evidence = verify_image_with_ai(file_bytes, category.value, effective_content_type)
-    
+
     if not is_valid_evidence:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST, 
@@ -256,8 +262,16 @@ class MapPoint(BaseModel):
     category: str
 
 @router.get("/admin/map-data/", response_model=List[MapPoint])
-def get_map_data(db: Session = Depends(get_db)):
+def get_map_data(db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user))# 🛑 1. Demands a valid token!):
     """Fetches all violation points for the heatmap."""
+    # 🛑 2. SECURITY CHECK: Ensure the database says they are an admin
+    if not getattr(current_user, 'is_admin', False):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN, 
+            detail="Access Denied: You do not have admin privileges."
+        )
+    
     violations = db.query(Violation).all()
     
     map_points = []

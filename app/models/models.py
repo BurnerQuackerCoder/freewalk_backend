@@ -1,4 +1,4 @@
-from sqlalchemy import Column, Integer, Float, String, DateTime, ForeignKey
+from sqlalchemy import Column, Integer, Float, String, DateTime, ForeignKey, Boolean
 from sqlalchemy.orm import relationship
 from datetime import datetime, timezone
 from app.core.database import Base
@@ -11,6 +11,7 @@ class User(Base):
     total_points = Column(Integer, default=0)
     created_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
     reports = relationship("Report", back_populates="user")
+    is_admin = Column(Boolean, default=False)  
 
 class Violation(Base):
     __tablename__ = "violations"
