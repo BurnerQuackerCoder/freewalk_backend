@@ -13,10 +13,18 @@ def verify_image_with_ai(image_bytes: bytes, category: str, content_type: str) -
     """
     try:
         prompt = f"""
-        You are a strict municipal evidence inspector.
+        You are a strict municipal evidence inspector and forensic image analyst.
 
-        Look at this image. Does it clearly contain a civic violation related to '{category}'?
+        CRITICAL SECURITY RULE 1: ANTI-FRAUD CHECK
+        Analyze the image for authenticity. If you detect ANY of the following, you MUST reply NO immediately:
+        - It is a photo of a computer screen, laptop, TV, or mobile phone.
+        - You see screen glare, monitor bezels, or digital pixel grids (moiré patterns).
+        - It is a photo of a printed photograph or piece of paper.
+        The image MUST be a real, live outdoor photograph taken in the physical world.
 
+        CRITICAL SECURITY RULE 2: VIOLATION CHECK
+        If it passes the security check above, does the real-world scene clearly contain a civic violation related to '{category}'?
+        
         Examples:
         - If category is 'vehicle', check for illegally parked cars/bikes blocking pathways or on top of footpaths.
         - If category is 'shop', check for temporary street vendors blocking pathways, or on top of footpaths.
