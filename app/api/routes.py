@@ -108,7 +108,7 @@ async def upload_report(
     license_plate: Optional[str] = Form(None),
     image: UploadFile = File(...),
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user), # <-- THE VAULT IS LOCKED
+    current_user: User = Depends(get_current_user),
 ):
     logging.info("Received upload content-type: %s", image.content_type)
 
@@ -137,21 +137,21 @@ async def upload_report(
     # ------------------------------------------
 
     try:
-        # This Supabase upload should ONLY happen if the AI says YES above
-        public_image_url = upload_image_to_storage(file_bytes, image.filename, effective_content_type)
-    except RuntimeError as e:
-        raise HTTPException(status_code=500, detail=str(e))
-    try:
+        # Upload happens exactly ONCE
         public_image_url = upload_image_to_storage(file_bytes, image.filename, effective_content_type)
     except RuntimeError as e:
         raise HTTPException(status_code=500, detail=str(e))
 
-    # We no longer need to manually query the user via an insecure email form field!
-    # current_user is guaranteed to be the authenticated owner of the token.
-
-    matched_violation = None
-
     try:
+        matched_violation = None
+        
+        # Create PostGIS point for the upload location
+        target_point = WKTElement(f"POINT({longitude} {latitude})", srid=4326)
+        
+        # Ask PostGIS which Ward polygon contains this GPS point
+        containing_ward = db.query(Ward).filter(func.ST_Intersects(Ward.geom, cast(target_point, Geography))).first()
+
+        # Check if this violation already exists
         if category == CategoryEnum.vehicle and license_plate:
             twenty_four_hours_ago = datetime.now(timezone.utc) - timedelta(hours=settings.RECENT_HOURS)
             matched_violation = db.query(Violation).filter(
@@ -160,43 +160,17 @@ async def upload_report(
                 Violation.updated_at >= twenty_four_hours_ago,
             ).first()
         else:
-            # --- THE POSTGIS UPGRADE ---
-            # Create a PostGIS point. WARNING: GIS always uses (Longitude, Latitude) order!
-            target_point = WKTElement(f"POINT({longitude} {latitude})", srid=4326)
-
-            # --- THE MAGIC: Ask PostGIS which Ward polygon contains this GPS point ---
-            containing_ward = db.query(Ward).filter(func.ST_Intersects(Ward.geom, cast(target_point, Geography))).first()
-
-            new_violation = Violation(
-                latitude=latitude,
-                longitude=longitude,
-                category=category.value,
-                entity_reference=license_plate.upper() if license_plate else None,
-                location=target_point,
-                ward_id=containing_ward.id if containing_ward else None # Automatically tag it!
-            )
-            db.add(new_violation)
-            db.commit()
-            db.refresh(new_violation)
-
-            new_report = Report(violation_id=new_violation.id, user_id=current_user.id, image_path=public_image_url)
-            points_earned = settings.REWARD_NEW_VIOLATION
-            message = f"First Reporter! New Violation Secured. +{points_earned} Points."
-
-            # ST_DWithin checks if the violation location is within X meters of our target point
+            # Check for existing structural violations within the bubble
             query = db.query(Violation).filter(
                 Violation.category == category.value,
                 func.ST_DWithin(Violation.location, target_point, settings.NEARBY_METERS)
             )
-
             if category == CategoryEnum.shop:
                 twenty_four_hours_ago = datetime.now(timezone.utc) - timedelta(hours=settings.RECENT_HOURS)
                 query = query.filter(Violation.updated_at >= twenty_four_hours_ago)
+            matched_violation = query.first()
 
-                matched_violation = query.first()
-        points_earned = 0
-        message = ""
-
+        # Handle the logic cleanly (Update vs Create)
         if matched_violation:
             setattr(matched_violation, "updated_at", datetime.now(timezone.utc))
             new_report = Report(violation_id=matched_violation.id, user_id=current_user.id, image_path=public_image_url)
@@ -208,7 +182,8 @@ async def upload_report(
                 longitude=longitude,
                 category=category.value,
                 entity_reference=license_plate.upper() if license_plate else None,
-                location=WKTElement(f"POINT({longitude} {latitude})", srid=4326)
+                location=target_point,
+                ward_id=containing_ward.id if containing_ward else None # Tags the ward dynamically!
             )
             db.add(new_violation)
             db.commit()
