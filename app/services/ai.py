@@ -1,6 +1,7 @@
 import logging
 from google import genai
 from google.genai import types  # <-- Required for the new SDK to handle raw bytes
+from fastapi import HTTPException
 from app.core.config import settings
 
 # Initialize the client
@@ -51,7 +52,15 @@ def verify_image_with_ai(image_bytes: bytes, category: str, content_type: str) -
         return "YES" in text
 
     except Exception as e:
+        error_message = str(e).lower()
         logging.error(f"AI Verification Error: {e}")
 
-        # If AI fails, reject upload (secure default)
+        # 🛑 THE FIX: Catch Google AI Rate Limits (429 Quota Exhausted)
+        if "429" in error_message or "quota" in error_message or "exhausted" in error_message:
+            raise HTTPException(
+                status_code=429, 
+                detail="Servers are analyzing a high volume of reports! Please wait 30 seconds and try again."
+            )
+
+        # If it's a generic AI failure, reject upload (secure default)
         return False

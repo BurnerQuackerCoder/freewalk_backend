@@ -13,6 +13,10 @@ class Settings(BaseSettings):
     RECENT_HOURS: int = 24
     AUTO_CREATE_TABLES: bool = False
 
+    # --- NEW: Anti-Spam & Security Configuration ---
+    MAX_DAILY_REPORTS: int = 10
+    #ALLOWED_CONTENT_TYPES: str = "image/jpeg,image/png,image/jpg"
+
     # --- NEW: Reward System Configuration ---
     REWARD_NEW_VIOLATION: int = 50
     REWARD_CONFIRMED_VIOLATION: int = 10

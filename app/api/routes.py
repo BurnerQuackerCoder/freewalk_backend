@@ -33,6 +33,8 @@ from app.services.geo import calculate_distance_meters # Use geopy or similar
 
 ALLOWED_CONTENT_TYPES = {"image/jpeg", "image/png", "image/jpg"}
 
+
+
 router = APIRouter()
 
 def verify_not_burner(email: str):
@@ -125,6 +127,23 @@ async def upload_report(
 
     if len(file_bytes) > settings.MAX_UPLOAD_SIZE_BYTES:
         raise HTTPException(status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE, detail="Image too large")
+    
+    # --- 🛑 THE 24-HOUR DAILY LIMIT CHECK 🛑 ---
+    #MAX_DAILY_REPORTS = 5
+    # 2. The 24-Hour Daily Limit check
+    twenty_four_hours_ago = datetime.now(timezone.utc) - timedelta(hours=24)
+    
+    recent_reports_count = db.query(Report).filter(
+        Report.user_id == current_user.id,
+        Report.timestamp >= twenty_four_hours_ago
+    ).count()
+
+    if recent_reports_count >= settings.MAX_DAILY_REPORTS:
+        raise HTTPException(
+            status_code=429,
+            detail=f"Daily limit reached! You have already submitted {settings.MAX_DAILY_REPORTS} reports in the last 24 hours. Thank you for your service!"
+        )
+    # ---------------------------------------------
     
     # --- 🛑 THE AI BOUNCER MUST BE HERE 🛑 ---
     is_valid_evidence = verify_image_with_ai(file_bytes, category.value, effective_content_type)
@@ -243,6 +262,7 @@ def get_map_data(db: Session = Depends(get_db),current_user: User = Depends(get_
     if not getattr(current_user, 'is_admin', False):
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN, 
+
             detail="Access Denied: You do not have admin privileges."
         )
     
